@@ -1,4 +1,5 @@
-import { loadStreamers, exportSettings, importSettings, saveStreamers, StreamerInfo } from '../utils/storage';
+import { loadStreamers, saveStreamers, StreamerInfo } from '../utils/storage';
+import { setupExportButton, setupImportButton, showStatusMessage } from '../utils/importExport';
 
 let streamersList: Record<string, StreamerInfo> = {};
 
@@ -142,67 +143,31 @@ function setupDragAndDrop() {
 
 // Set up event listeners for import/export
 function setupEventListeners() {
-  // Handle export button
-  const exportBtn = document.getElementById('export-btn');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      exportSettings(streamersList);
-      showStatusMessage('設定をエクスポートしました', 'success');
-    });
-  }
+  // Set up export functionality
+  setupExportButton('export-btn', () => {
+    showStatusMessage('設定をエクスポートしました', 'success');
+  });
   
-  // Handle import button and file input
-  const importBtn = document.getElementById('import-btn');
-  const importFile = document.getElementById('import-file') as HTMLInputElement;
-  
-  if (importBtn && importFile) {
-    importBtn.addEventListener('click', () => {
-      importFile.click();
-    });
-    
-    importFile.addEventListener('change', async (event) => {
-      const target = event.target as HTMLInputElement;
-      const file = target.files?.[0];
-      
-      if (file) {
-        try {
-          const importedData = await importSettings(file);
-          
-          // Merge with existing data (preserve non-favorites)
-          Object.keys(importedData).forEach(key => {
-            if (!streamersList[key] || importedData[key].isFavorite) {
-              streamersList[key] = importedData[key];
-            }
-          });
-          
-          await saveStreamers(streamersList);
-          renderFavoritesList();
-          showStatusMessage('設定を正常にインポートしました', 'success');
-          
-          // Reset input
-          target.value = '';
-        } catch (error) {
-          console.error('Import error:', error);
-          showStatusMessage('設定のインポート中にエラーが発生しました', 'error');
+  // Set up import functionality
+  setupImportButton(
+    'import-btn',
+    'import-file',
+    async (importedData) => {
+      // Merge with existing data (preserve non-favorites)
+      Object.keys(importedData).forEach(key => {
+        if (!streamersList[key] || importedData[key].isFavorite) {
+          streamersList[key] = importedData[key];
         }
-      }
-    });
-  }
-}
-
-// Show status message
-function showStatusMessage(message: string, type: 'success' | 'error') {
-  const statusElement = document.getElementById('status-message');
-  if (!statusElement) return;
-  
-  statusElement.textContent = message;
-  statusElement.className = type;
-  
-  // Clear after 3 seconds
-  setTimeout(() => {
-    statusElement.textContent = '';
-    statusElement.className = '';
-  }, 3000);
+      });
+      
+      await saveStreamers(streamersList);
+      renderFavoritesList();
+      showStatusMessage('設定を正常にインポートしました', 'success');
+    },
+    () => {
+      showStatusMessage('設定のインポート中にエラーが発生しました', 'error');
+    }
+  );
 }
 
 // Initialize when DOM is ready

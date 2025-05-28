@@ -1,45 +1,23 @@
-import { loadStreamers, exportSettings, importSettings, saveStreamers } from '../utils/storage';
+import { saveStreamers } from '../utils/storage';
+import { setupExportButton, setupImportButton } from '../utils/importExport';
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Handle export button
-  const exportBtn = document.getElementById('export-btn');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', async () => {
-      const streamers = await loadStreamers();
-      exportSettings(streamers);
-    });
-  }
+  // Set up export functionality
+  setupExportButton('export-btn');
   
-  // Handle import button
-  const importBtn = document.getElementById('import-btn');
-  const importFile = document.getElementById('import-file') as HTMLInputElement;
-  
-  if (importBtn && importFile) {
-    importBtn.addEventListener('click', () => {
-      importFile.click();
-    });
-    
-    importFile.addEventListener('change', async (event) => {
-      const target = event.target as HTMLInputElement;
-      const file = target.files?.[0];
-      
-      if (file) {
-        try {
-          const importedData = await importSettings(file);
-          await saveStreamers(importedData);
-          
-          // Show success message
-          alert('設定を正常にインポートしました。Twitchのページを再読み込みしてください。');
-          
-          // Reset input
-          target.value = '';
-        } catch (error) {
-          console.error('Import error:', error);
-          alert('設定のインポート中にエラーが発生しました。ファイル形式を確認してください。');
-        }
-      }
-    });
-  }
+  // Set up import functionality
+  setupImportButton(
+    'import-btn',
+    'import-file',
+    async (importedData) => {
+      await saveStreamers(importedData);
+      // Show success message
+      alert('設定を正常にインポートしました。Twitchのページを再読み込みしてください。');
+    },
+    () => {
+      alert('設定のインポート中にエラーが発生しました。ファイル形式を確認してください。');
+    }
+  );
   
   // Handle options link
   const optionsLink = document.getElementById('options-link');
