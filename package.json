@@ -6,9 +6,10 @@
   "scripts": {
     "build": "webpack --mode=production",
     "dev": "webpack --mode=development --watch",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "package": "npm run build && cd dist && zip -r ../twitch-favorites-v$npm_package_version.zip *"
   },
-  "author": "",
+  "author": "g-kari",
   "license": "MIT",
   "devDependencies": {
     "@types/chrome": "^0.0.246",

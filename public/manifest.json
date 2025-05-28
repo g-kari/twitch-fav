@@ -2,7 +2,9 @@
   "manifest_version": 3,
   "name": "Twitch Favorites",
   "version": "1.0.0",
-  "description": "Reorder and favorite Twitch streamers in the sidebar",
+  "description": "Enhance your Twitch experience by organizing and favoriting streamers in the sidebar. Easily reorder using drag & drop.",
+  "author": "g-kari",
+  "homepage_url": "https://github.com/g-kari/twitch-fav",
   "permissions": ["storage"],
   "action": {
     "default_popup": "popup.html",

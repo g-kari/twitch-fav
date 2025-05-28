@@ -24,6 +24,9 @@ npm run dev
 
 # 本番用にビルド
 npm run build
+
+# Chrome Web Store用のパッケージを作成
+npm run package
 ```
 
 ### 拡張機能のインストール方法
@@ -33,6 +36,20 @@ npm run build
 3. 「デベロッパーモード」を有効にします
 4. 「パッケージ化されていない拡張機能を読み込む」をクリックします
 5. このプロジェクトの `dist` ディレクトリを選択します
+
+### Chrome Web Storeに公開する方法
+
+1. `npm run package` を実行してZIPファイルを作成します
+2. [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole/) にアクセスします
+3. 「新しい項目を追加」をクリックします
+4. 作成されたZIPファイル（`twitch-favorites-v1.0.0.zip`）をアップロードします
+5. 以下の情報を入力します：
+   - 説明文
+   - スクリーンショット（最低2枚）
+   - プロモーション画像
+   - カテゴリ（「生産性」または「ソーシャル＆コミュニケーション」が適切）
+   - 言語設定
+6. 「公開」ボタンをクリックして審査に提出します
 
 ## 使い方
 
