@@ -51,6 +51,18 @@ npm run package
    - 言語設定
 6. 「公開」ボタンをクリックして審査に提出します
 
+### リリース方法
+
+1. package.jsonのバージョンを更新します（例：`"version": "1.0.1"`）
+2. 変更をコミットしてプッシュします
+3. 新しいバージョンのタグを作成してプッシュします：
+   ```bash
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+4. GitHub Actionsがトリガーされ、自動的にビルド、パッケージングを行い、GitHubリリースを作成します
+5. 作成されたリリースからZIPファイルをダウンロードしてChrome Web Storeにアップロードできます
+
 ## 使い方
 
 1. Twitchのウェブサイト（https://www.twitch.tv/）にアクセスします
