@@ -1,0 +1,30 @@
+.twitch-fav-star {
+  cursor: pointer;
+  margin-left: 8px;
+  color: #adadb8;
+  transition: color 0.2s;
+}
+
+.twitch-fav-star:hover, .twitch-fav-star.active {
+  color: #ffd700;
+}
+
+.twitch-sidebar-channel {
+  cursor: grab;
+}
+
+.twitch-sidebar-channel.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.twitch-fav-separator {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #adadb8;
+  text-transform: uppercase;
+  background-color: rgba(0, 0, 0, 0.2);
+  margin-top: 4px;
+  margin-bottom: 4px;
+}

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Twitch Favorites",
+  "version": "1.0.0",
+  "description": "Enhance your Twitch experience by organizing and favoriting streamers in the sidebar. Easily reorder using drag & drop.",
+  "author": "g-kari",
+  "homepage_url": "https://github.com/g-kari/twitch-fav",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://www.twitch.tv/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "twitch-fav",
+  "version": "1.0.0",
+  "description": "Twitch Favorites - Reorder and favorite Twitch streamers in the sidebar",
+  "main": "dist/content.js",
+  "scripts": {
+    "build": "webpack --mode=production",
+    "dev": "webpack --mode=development --watch",
+    "lint": "eslint . --ext .ts",
+    "package": "npm run build && cd dist && zip -r ../twitch-favorites-v$npm_package_version.zip *"
+  },
+  "author": "g-kari",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.246",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "eslint": "^8.54.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.2.2",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

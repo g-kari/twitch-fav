@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch Favorites</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Twitch Favorites</h1>
+    <div class="actions">
+      <button id="export-btn">設定をエクスポート</button>
+      <button id="import-btn">設定をインポート</button>
+      <input type="file" id="import-file" accept=".json" style="display: none;">
+    </div>
+    <p class="help-text">Twitchのサイドバーのストリーマーリストの右側にある⭐をクリックして、お気に入りを追加できます。</p>
+    <p class="help-text">ドラッグ&ドロップでストリーマーの順序を変更できます。</p>
+    <p class="help-text"><a href="#" id="options-link">詳細設定</a></p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
