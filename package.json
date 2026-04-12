@@ -12,7 +12,7 @@
   "author": "g-kari",
   "license": "MIT",
   "devDependencies": {
-    "@types/chrome": "^0.0.246",
+    "@types/chrome": "^0.1.40",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.58.1",
     "copy-webpack-plugin": "^14.0.0",
