@@ -1,5 +1,6 @@
 (async () => {
  const pause=ms=>new Promise(r=>setTimeout(r,ms));const checks=[];
+ async function waitFor(predicate){for(let i=0;i<60;i++){if(predicate())return;await pause(25);}throw Error('asynchronous operation timed out');}
  function assert(condition,label){if(!condition)throw Error(label + ' | ' + JSON.stringify({stored:fixture.stored(),status:document.getElementById('status-message')?.textContent,writes:fixture.writes,errors:fixture.errors}));checks.push(label);}
  const ids=()=>Array.from(document.querySelectorAll('[data-a-target="followed-channel"]')).map(x=>x.getAttribute('href').slice(1));
  const anchor=name=>document.querySelector(`a[href="/${name}"]`);
@@ -45,9 +46,9 @@
    document.querySelector('[data-focus-key="streamer-bob-remove"]').click();await pause(100);
    assert(rows().join()==='streamer-alice','remove persisted');
    document.querySelector('.favorite-item').dispatchEvent(new Event('dragenter',{bubbles:true,cancelable:true}));assert(true,'external dragenter without internal drag safe');
-   const input=document.getElementById('import-file');const bad=new DataTransfer();bad.items.add(new File(['{broken'], 'bad.json',{type:'application/json'}));input.files=bad.files;input.dispatchEvent(new Event('change',{bubbles:true}));await pause(100);
+   const input=document.getElementById('import-file');const bad=new DataTransfer();bad.items.add(new File(['{broken'], 'bad.json',{type:'application/json'}));input.files=bad.files;input.dispatchEvent(new Event('change',{bubbles:true}));await waitFor(()=>!document.getElementById('import-btn').disabled);
    assert(document.getElementById('status-message').className==='error','invalid import displayed');assert(input.value==='' && !document.getElementById('import-btn').disabled,'failed import can be retried');
-   const good=new DataTransfer();const imported={'streamer-zed':{id:'streamer-zed',username:'zed',displayName:'<img src=x onerror=alert(1)>',isFavorite:true,order:0,avatarUrl:'https://example.invalid/track'}};good.items.add(new File([JSON.stringify(imported)],'good.json',{type:'application/json'}));input.files=good.files;input.dispatchEvent(new Event('change',{bubbles:true}));await pause(100);
+   const good=new DataTransfer();const imported={'streamer-zed':{id:'streamer-zed',username:'zed',displayName:'<img src=x onerror=alert(1)>',isFavorite:true,order:0,avatarUrl:'https://example.invalid/track'}};good.items.add(new File([JSON.stringify(imported)],'good.json',{type:'application/json'}));input.files=good.files;input.dispatchEvent(new Event('change',{bubbles:true}));await waitFor(()=>!document.getElementById('import-btn').disabled);
    assert(rows().join()==='streamer-zed','import consistently replaces settings');assert(!document.querySelector('.favorite-item img') && document.querySelector('.favorite-item .name').textContent.includes('<img'),'import names rendered as text, URLs not fetched');
    let called=0;const original=chrome.storage.local.set;chrome.storage.local.set=(...args)=>{called++;original(...args);};
    document.querySelector('[data-focus-key="streamer-zed-remove"]').click();await pause(100);assert(called===1,'rerenders do not multiply mutation handlers');
