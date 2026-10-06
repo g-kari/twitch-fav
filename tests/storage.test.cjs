@@ -1,0 +1,13 @@
+const {test,beforeEach}=require('node:test');const assert=require('node:assert/strict');
+const {loadStreamers,saveStreamers,importSettings,STORAGE_KEY}=require('../.test-build/utils/storage.js');
+const data={'streamer-alice':{id:'streamer-alice',username:'alice',displayName:'Alice',isFavorite:true,order:0}};
+beforeEach(()=>{global.chrome={runtime:{},storage:{local:{get(_keys,cb){cb({[STORAGE_KEY]:data})},set(_data,cb){cb()}}}};});
+test('storage loads validated data',async()=>assert.deepEqual(await loadStreamers(),data));
+test('get errors are surfaced',async()=>{chrome.storage.local.get=(_keys,cb)=>{chrome.runtime.lastError={message:'read failed'};cb({});delete chrome.runtime.lastError;};await assert.rejects(loadStreamers(),/read failed/);});
+test('invalid stored data does not silently overwrite settings',async()=>{chrome.storage.local.get=(_keys,cb)=>cb({[STORAGE_KEY]:[]});await assert.rejects(loadStreamers());});
+test('set error is surfaced',async()=>{chrome.storage.local.set=(_data,cb)=>{chrome.runtime.lastError={message:'quota'};cb();delete chrome.runtime.lastError;};await assert.rejects(saveStreamers(data),/quota/);});
+test('invalid save is blocked before writing',async()=>{let called=false;chrome.storage.local.set=()=>{called=true};await assert.rejects(saveStreamers([]));assert.equal(called,false);});
+test('oversized import rejected before any reader exists',async()=>{await assert.rejects(importSettings({size:1048577}),/1 MiB/);});
+test('malformed import rejects without persistence',async()=>{global.FileReader=class{readAsText(){this.result='{' ;this.onload();}};await assert.rejects(importSettings({size:1}));delete global.FileReader;});
+test('valid import roundtrip',async()=>{global.FileReader=class{readAsText(){this.result=JSON.stringify(data);this.onload();}};assert.deepEqual(await importSettings({size:10}),data);delete global.FileReader;});
+test('import abort rejects',async()=>{global.FileReader=class{readAsText(){this.onabort();}};await assert.rejects(importSettings({size:1}));delete global.FileReader;});

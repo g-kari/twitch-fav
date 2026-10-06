@@ -7,7 +7,12 @@
     "strict": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "lib": ["dom", "es2019"]
+    "lib": [
+      "dom",
+      "es2022"
+    ]
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }
