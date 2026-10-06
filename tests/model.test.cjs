@@ -46,3 +46,10 @@ test('zip CRC and structure',()=>{
  const {crc32,zipFiles}=require('../scripts/package.cjs');assert.equal(crc32(Buffer.from('123456789')),0xcbf43926);
  const zip=zipFiles([['test.txt',Buffer.from('hello')]]);assert.equal(zip.readUInt32LE(0),0x04034b50);assert.equal(zip.readUInt32LE(zip.length-22),0x06054b50);assert.equal(zip.readUInt16LE(zip.length-12),1);
 });
+test('preserves safe Twitch avatars but rejects arbitrary or credentialed URLs',()=>{
+ const {safeAvatarUrl}=require('../.test-build/utils/model.js');
+ const trusted='https://static-cdn.jtvnw.net/jtv_user_pictures/abc-profile_image-70x70.png';
+ assert.equal(safeAvatarUrl(trusted),trusted);
+ assert.equal(validateStreamers(map({...item('alice'),avatarUrl:trusted}))['streamer-alice'].avatarUrl,trusted);
+ for(const url of ['https://example.test/a.png','javascript:alert(1)','https://static-cdn.jtvnw.net.evil.test/jtv_user_pictures/a.png','https://u:p@static-cdn.jtvnw.net/jtv_user_pictures/a.png',trusted+'?track=1','http://static-cdn.jtvnw.net/jtv_user_pictures/a.png'])assert.equal(safeAvatarUrl(url),undefined);
+});

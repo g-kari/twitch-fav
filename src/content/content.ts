@@ -1,5 +1,5 @@
 import { Action, sendAction } from '../utils/actions';
-import { StreamerInfo, Streamers, channelName, sortedStreamers, validateStreamers } from '../utils/model';
+import { StreamerInfo, Streamers, channelName, safeAvatarUrl, sortedStreamers, validateStreamers } from '../utils/model';
 import { STORAGE_KEY, loadStreamers } from '../utils/storage';
 
 const SIDEBAR = '[data-a-target="side-nav-header"] + div';
@@ -40,7 +40,7 @@ export function startContent() {
     const title = anchor.querySelector('[data-a-target="side-nav-title"]')?.cloneNode(true) as HTMLElement | undefined;
     title?.querySelectorAll('.twitch-fav-star').forEach(star => star.remove());
     const displayName = title?.textContent?.trim().slice(0, 200) || username;
-    return { id, username, displayName, isFavorite: data[id]?.isFavorite ?? false,
+    return { id, username, displayName, avatarUrl: safeAvatarUrl(anchor.querySelector('img')?.getAttribute('src')), isFavorite: data[id]?.isFavorite ?? false,
       order: data[id]?.order ?? discovered[id]?.order ?? Object.keys(data).length + Object.keys(discovered).length };
   }
   async function commit(action: Action) {

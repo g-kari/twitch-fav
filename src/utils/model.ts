@@ -13,6 +13,15 @@ export function channelName(href: string): string | null {
   const match = /^\/([a-z0-9_]{1,25})\/?$/i.exec(href);
   return match ? match[1].toLowerCase() : null;
 }
+export function safeAvatarUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 2048) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'static-cdn.jtvnw.net' || url.port || url.username || url.password || url.search || url.hash) return undefined;
+    if (!/^\/(jtv_user_pictures|ttv-static)\/[a-z0-9_./-]+\.(png|jpe?g|webp)$/i.test(url.pathname)) return undefined;
+    return url.href;
+  } catch { return undefined; }
+}
 export function validateStreamers(value: unknown): Streamers {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('設定はJSONオブジェクトである必要があります。');
   const entries = Object.entries(value);
@@ -30,8 +39,10 @@ export function validateStreamers(value: unknown): Streamers {
     const username = item.username.toLowerCase();
     const id = `streamer-${username}`;
     if (Object.hasOwn(result, id)) throw new Error('チャンネルが重複しています。');
-    // Avatars are not needed for ordering. Drop imported URLs to avoid arbitrary requests.
+    // Preserve Twitch CDN avatars; never load arbitrary URLs supplied by an import.
     result[id] = { id, username, displayName: item.displayName, isFavorite: item.isFavorite, order: item.order as number };
+    const avatarUrl = safeAvatarUrl(item.avatarUrl);
+    if (avatarUrl) result[id].avatarUrl = avatarUrl;
   }
   return result;
 }

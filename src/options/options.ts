@@ -7,7 +7,7 @@ let busy = false;
 let draggedId: string | null = null;
 const errorMessage = (error: unknown) => showStatusMessage(error instanceof Error ? error.message : '操作に失敗しました。', 'error');
 async function commit(action: Action, success: string): Promise<void> {
-  if (busy) return;
+  if (busy) { const error = new Error('保存中です。少し待ってから再試行してください。'); errorMessage(error); throw error; }
   const focusKey = (document.activeElement as HTMLElement | null)?.dataset.focusKey;
   busy = true;
   render();
@@ -35,6 +35,9 @@ function render() {
   favorites.forEach((favorite, index) => {
     const row = document.createElement('div'); row.className = 'favorite-item';
     row.draggable = !busy; row.dataset.streamerId = favorite.id;
+    if (favorite.avatarUrl) {
+      const avatar = document.createElement('img'); avatar.src = favorite.avatarUrl; avatar.alt = ''; avatar.referrerPolicy = 'no-referrer'; avatar.width = 30; avatar.height = 30; row.appendChild(avatar);
+    }
     const name = document.createElement('div'); name.className = 'name'; name.textContent = favorite.displayName; row.appendChild(name);
     const button = (label: string, suffix: string, action: Action, disabled = false) => {
       const element = document.createElement('button'); element.textContent = label; element.type = 'button';
