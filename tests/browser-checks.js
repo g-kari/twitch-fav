@@ -38,6 +38,7 @@
   } else {
    const rows=()=>Array.from(document.querySelectorAll('.favorite-item')).map(x=>x.dataset.streamerId);
    assert(rows().join()==='streamer-alice,streamer-bob','options renders favorites');
+   document.querySelector('[data-focus-key="streamer-bob-up"]').focus();
    document.querySelector('[data-focus-key="streamer-bob-up"]').click();await pause(100);
    assert(rows().join()==='streamer-bob,streamer-alice','keyboard-accessible move');
    assert(document.activeElement?.dataset.focusKey?.startsWith('streamer-'),'keyboard focus retained after reorder');
