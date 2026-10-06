@@ -1,6 +1,6 @@
 (async () => {
  const pause=ms=>new Promise(r=>setTimeout(r,ms));const checks=[];
- function assert(condition,label){if(!condition)throw Error(label);checks.push(label);}
+ function assert(condition,label){if(!condition)throw Error(label + ' | ' + JSON.stringify({stored:fixture.stored(),status:document.getElementById('status-message')?.textContent,writes:fixture.writes,errors:fixture.errors}));checks.push(label);}
  const ids=()=>Array.from(document.querySelectorAll('[data-a-target="followed-channel"]')).map(x=>x.getAttribute('href').slice(1));
  const anchor=name=>document.querySelector(`a[href="/${name}"]`);
  const star=name=>anchor(name).querySelector('.twitch-fav-star');
