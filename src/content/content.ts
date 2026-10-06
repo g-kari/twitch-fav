@@ -1,294 +1,160 @@
-import { StreamerInfo, loadStreamers, saveStreamers } from '../utils/storage';
+import { Action, sendAction } from '../utils/actions';
+import { StreamerInfo, Streamers, channelName, safeAvatarUrl, sortedStreamers, validateStreamers } from '../utils/model';
+import { STORAGE_KEY, loadStreamers } from '../utils/storage';
 
-// Constants
-const SIDEBAR_SELECTOR = '[data-a-target="side-nav-header"] + div';
-const CHANNEL_ITEM_SELECTOR = 'a[data-a-target="followed-channel"]';
-const STAR_ICON = '★';
-const FAV_SEPARATOR_ID = 'twitch-fav-separator';
-
-// Global state
-let streamersList: Record<string, StreamerInfo> = {};
-let sidebarObserver: MutationObserver | null = null;
-let isDragging = false;
-let draggedElement: HTMLElement | null = null;
-
-// Main initialization function
-async function init() {
-  streamersList = await loadStreamers();
-  
-  // Wait for sidebar to be loaded
-  const waitForSidebar = setInterval(() => {
-    const sidebar = document.querySelector(SIDEBAR_SELECTOR);
-    if (sidebar) {
-      clearInterval(waitForSidebar);
-      initSidebar();
-      
-      // Set up observer for sidebar changes
-      setupSidebarObserver();
-    }
-  }, 1000);
-}
-
-// Initialize the sidebar elements
-function initSidebar() {
-  const channels = document.querySelectorAll(CHANNEL_ITEM_SELECTOR);
-  if (channels.length === 0) return;
-
-  // Process each channel
-  Array.from(channels).forEach(processChannelElement);
-  
-  // Apply ordering based on favorites
-  applyChannelOrdering();
-}
-
-// Process a single channel element
-function processChannelElement(channelElement: Element) {
-  if (!(channelElement instanceof HTMLElement)) return;
-  if (channelElement.dataset.twitchFavProcessed === 'true') return;
-  
-  // Extract streamer info
-  const channelUrl = channelElement.getAttribute('href');
-  if (!channelUrl) return;
-  
-  const username = channelUrl.substring(1); // Remove leading slash
-  const displayNameElement = channelElement.querySelector('[data-a-target="side-nav-title"]');
-  const displayName = displayNameElement ? displayNameElement.textContent || username : username;
-  
-  const avatarElement = channelElement.querySelector('img');
-  const avatarUrl = avatarElement ? avatarElement.getAttribute('src') || undefined : undefined;
-  
-  // Create unique ID
-  const streamerId = `streamer-${username}`;
-  
-  // Add to our data structure if not exists
-  if (!streamersList[streamerId]) {
-    streamersList[streamerId] = {
-      id: streamerId,
-      username,
-      displayName,
-      avatarUrl,
-      isFavorite: false,
-      order: Object.keys(streamersList).length,
-    };
-  } else {
-    // Update display name and avatar if changed
-    streamersList[streamerId].displayName = displayName;
-    if (avatarUrl) {
-      streamersList[streamerId].avatarUrl = avatarUrl;
-    }
+const SIDEBAR = '[data-a-target="side-nav-header"] + div';
+const CHANNEL = 'a[data-a-target="followed-channel"]';
+export function startContent() {
+  let data: Streamers = {};
+  let discovered: Streamers = {};
+  let ready = false;
+  let busy = false;
+  let draggedId: string | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let sidebar: Element | null = null;
+  const processed = new WeakSet<HTMLElement>();
+  const observer = new MutationObserver(mutations => {
+    if (!sidebar?.isConnected || mutations.some(mutation => sidebar?.contains(mutation.target))) schedule();
+  });
+  function watch() {
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
   }
-  
-  // Add favorite star icon
-  const starIcon = document.createElement('span');
-  starIcon.className = 'twitch-fav-star';
-  starIcon.textContent = STAR_ICON;
-  if (streamersList[streamerId].isFavorite) {
-    starIcon.classList.add('active');
+  function schedule() {
+    if (timer !== undefined) return;
+    timer = setTimeout(() => { timer = undefined; render(); }, 50);
   }
-  
-  starIcon.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Toggle favorite state
-    streamersList[streamerId].isFavorite = !streamersList[streamerId].isFavorite;
-    
-    // Update UI
-    if (streamersList[streamerId].isFavorite) {
-      starIcon.classList.add('active');
-    } else {
-      starIcon.classList.remove('active');
+  function notify(message: string) {
+    let status = document.getElementById('twitch-fav-status');
+    if (!status) {
+      status = document.createElement('div');
+      status.id = 'twitch-fav-status';
+      status.setAttribute('role', 'status');
+      (sidebar ?? document.body).appendChild(status);
     }
-    
-    // Save changes
-    saveStreamers(streamersList).then(() => {
-      applyChannelOrdering();
-    });
-  });
-  
-  // Add the star to the channel element
-  const titleElement = channelElement.querySelector('[data-a-target="side-nav-title"]');
-  if (titleElement) {
-    titleElement.appendChild(starIcon);
+    status.textContent = message;
   }
-  
-  // Add drag functionality
-  channelElement.classList.add('twitch-sidebar-channel');
-  channelElement.setAttribute('draggable', 'true');
-  
-  channelElement.addEventListener('dragstart', (e) => {
-    if (!(e.target instanceof HTMLElement)) return;
-    isDragging = true;
-    draggedElement = channelElement;
-    channelElement.classList.add('dragging');
-    
-    // Set streamer ID as drag data
-    if (e.dataTransfer) {
-      e.dataTransfer.setData('text/plain', streamerId);
-      e.dataTransfer.effectAllowed = 'move';
-    }
-  });
-  
-  channelElement.addEventListener('dragend', () => {
-    isDragging = false;
-    channelElement.classList.remove('dragging');
-    draggedElement = null;
-  });
-  
-  channelElement.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    if (isDragging && draggedElement !== channelElement) {
-      e.dataTransfer!.dropEffect = 'move';
-    }
-  });
-  
-  channelElement.addEventListener('drop', (e) => {
-    e.preventDefault();
-    if (!isDragging || !draggedElement || draggedElement === channelElement) return;
-    
-    const draggedId = e.dataTransfer!.getData('text/plain');
-    const targetId = streamerId;
-    
-    if (draggedId && draggedId !== targetId) {
-      // Reorder the streamers list
-      const draggedOrder = streamersList[draggedId].order;
-      const targetOrder = streamersList[targetId].order;
-      
-      if (draggedOrder < targetOrder) {
-        // Moving down
-        Object.values(streamersList).forEach(streamer => {
-          if (streamer.order > draggedOrder && streamer.order <= targetOrder) {
-            streamer.order--;
-          }
-        });
-      } else {
-        // Moving up
-        Object.values(streamersList).forEach(streamer => {
-          if (streamer.order >= targetOrder && streamer.order < draggedOrder) {
-            streamer.order++;
-          }
-        });
-      }
-      
-      streamersList[draggedId].order = targetOrder;
-      
-      // Save changes and update UI
-      saveStreamers(streamersList).then(() => {
-        applyChannelOrdering();
+  function info(anchor: HTMLElement): StreamerInfo | null {
+    const username = channelName(anchor.getAttribute('href') ?? '');
+    if (!username) return null;
+    const id = `streamer-${username}`;
+    const title = anchor.querySelector('[data-a-target="side-nav-title"]')?.cloneNode(true) as HTMLElement | undefined;
+    title?.querySelectorAll('.twitch-fav-star').forEach(star => star.remove());
+    const displayName = title?.textContent?.trim().slice(0, 200) || username;
+    return { id, username, displayName, avatarUrl: safeAvatarUrl(anchor.querySelector('img')?.getAttribute('src')), isFavorite: data[id]?.isFavorite ?? false,
+      order: data[id]?.order ?? discovered[id]?.order ?? Object.keys(data).length + Object.keys(discovered).length };
+  }
+  async function commit(action: Action) {
+    if (!ready || busy) return;
+    busy = true;
+    render();
+    try { data = await sendAction(action); notify('保存しました'); }
+    catch (error) { notify(error instanceof Error ? error.message : '保存できませんでした。'); }
+    finally { busy = false; render(); }
+  }
+  function process(anchor: HTMLElement) {
+    const item = info(anchor);
+    if (!item) { anchor.querySelector('.twitch-fav-star')?.remove(); delete anchor.dataset.twitchFavId; anchor.draggable = false; return; }
+    discovered[item.id] = item;
+    anchor.dataset.twitchFavId = item.id;
+    let star = anchor.querySelector<HTMLElement>('.twitch-fav-star');
+    const title = anchor.querySelector('[data-a-target="side-nav-title"]');
+    if (!star && title) {
+      // Span avoids invalid button-inside-link markup. Explicit keyboard behavior below.
+      star = document.createElement('span');
+      star.className = 'twitch-fav-star';
+      star.setAttribute('role', 'button');
+      star.tabIndex = 0;
+      star.textContent = '★';
+      title.appendChild(star);
+      const activate = (event: Event) => {
+        event.preventDefault(); event.stopPropagation();
+        const current = info(anchor);
+        if (current) void commit({ type: 'toggle', streamer: current });
+      };
+      star.addEventListener('click', activate);
+      star.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') activate(event);
       });
     }
-  });
-  
-  // Mark as processed
-  channelElement.dataset.twitchFavProcessed = 'true';
-}
-
-// Apply ordering to channels based on favorites
-function applyChannelOrdering() {
-  const sidebar = document.querySelector(SIDEBAR_SELECTOR);
-  if (!sidebar) return;
-  
-  const channels = Array.from(document.querySelectorAll(CHANNEL_ITEM_SELECTOR));
-  if (channels.length === 0) return;
-  
-  // Get all favorited streamers
-  const favorites = Object.values(streamersList)
-    .filter(streamer => streamer.isFavorite)
-    .sort((a, b) => a.order - b.order);
-  
-  // Only proceed if we have favorites
-  if (favorites.length > 0) {
-    // Create or update separator element
-    let separator = document.getElementById(FAV_SEPARATOR_ID);
-    if (!separator) {
-      separator = document.createElement('div');
-      separator.id = FAV_SEPARATOR_ID;
-      separator.className = 'twitch-fav-separator';
-      separator.textContent = 'お気に入り';
-      
-      // Insert at top of sidebar
-      if (sidebar.firstChild) {
-        sidebar.insertBefore(separator, sidebar.firstChild);
-      } else {
-        sidebar.appendChild(separator);
-      }
+    if (star) {
+      star.classList.toggle('active', item.isFavorite);
+      star.setAttribute('aria-pressed', String(item.isFavorite));
+      star.setAttribute('aria-disabled', String(!ready || busy));
+      star.setAttribute('aria-label', `${item.displayName}をお気に入り${item.isFavorite ? 'から削除' : 'に追加'}`);
+      star.title = 'お気に入りの切り替え';
     }
-    
-    // Move favorite channels to the top
-    favorites.forEach(favorite => {
-      const channelElement = findChannelElement(favorite.username);
-      if (channelElement) {
-        // Move to top, right after the separator
-        sidebar.insertBefore(channelElement, separator.nextSibling);
+    anchor.classList.add('twitch-sidebar-channel');
+    anchor.draggable = ready && !busy;
+    if (processed.has(anchor)) return;
+    processed.add(anchor);
+    anchor.addEventListener('dragstart', event => {
+      if (!ready || busy) { event.preventDefault(); return; }
+      draggedId = info(anchor)?.id ?? null;
+      if (event.dataTransfer && draggedId) {
+        event.dataTransfer.setData('text/plain', draggedId);
+        event.dataTransfer.effectAllowed = 'move';
       }
+      anchor.classList.add('dragging');
     });
-  } else {
-    // Remove separator if no favorites
-    const separator = document.getElementById(FAV_SEPARATOR_ID);
-    if (separator) {
-      separator.remove();
-    }
+    anchor.addEventListener('dragend', () => { draggedId = null; anchor.classList.remove('dragging'); schedule(); });
+    anchor.addEventListener('dragover', event => {
+      if (!draggedId) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    });
+    anchor.addEventListener('drop', event => {
+      if (!draggedId) return;
+      event.preventDefault(); event.stopPropagation();
+      const targetId = info(anchor)?.id;
+      const id = draggedId;
+      draggedId = null;
+      if (targetId && id !== targetId) void commit({ type: 'move', id, targetId, discovered });
+    });
   }
-}
-
-// Find channel element by username
-function findChannelElement(username: string): HTMLElement | null {
-  const href = `/${username}`;
-  const elements = document.querySelectorAll(CHANNEL_ITEM_SELECTOR);
-  
-  for (const element of Array.from(elements)) {
-    if (element.getAttribute('href') === href) {
-      return element as HTMLElement;
-    }
-  }
-  
-  return null;
-}
-
-// Set up observer for sidebar changes
-function setupSidebarObserver() {
-  if (sidebarObserver) {
-    sidebarObserver.disconnect();
-  }
-  
-  const sidebar = document.querySelector(SIDEBAR_SELECTOR);
-  if (!sidebar) return;
-  
-  sidebarObserver = new MutationObserver((mutations) => {
-    let shouldUpdate = false;
-    
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        // Check if any added nodes are channel elements
-        for (const node of Array.from(mutation.addedNodes)) {
-          if (node instanceof HTMLElement) {
-            if (node.matches(CHANNEL_ITEM_SELECTOR)) {
-              processChannelElement(node);
-              shouldUpdate = true;
-            } else {
-              // Check for channel elements inside the added node
-              const channels = node.querySelectorAll(CHANNEL_ITEM_SELECTOR);
-              if (channels.length > 0) {
-                channels.forEach(processChannelElement);
-                shouldUpdate = true;
-              }
-            }
-          }
-        }
+  function render() {
+    sidebar = document.querySelector(SIDEBAR);
+    if (!sidebar || draggedId) return;
+    observer.disconnect();
+    try {
+      const channels = Array.from(sidebar.querySelectorAll<HTMLElement>(CHANNEL));
+      channels.forEach(process);
+      const ranks = new Map(sortedStreamers({ ...discovered, ...data }).map((item, index) => [item.id, index]));
+      const groups = new Map<Element, HTMLElement[]>();
+      for (const anchor of channels) {
+        if (!anchor.dataset.twitchFavId) continue;
+        let unit = anchor;
+        // Keep Twitch's existing card wrappers intact, never extract anchors from React cards.
+        while (unit.parentElement && unit.parentElement !== sidebar &&
+               unit.parentElement.querySelectorAll(CHANNEL).length === 1) unit = unit.parentElement;
+        const parent = unit.parentElement;
+        if (!parent || !sidebar.contains(parent)) continue;
+        const group = groups.get(parent) ?? [];
+        if (!group.includes(unit)) group.push(unit);
+        groups.set(parent, group);
       }
-    }
-    
-    if (shouldUpdate) {
-      applyChannelOrdering();
-    }
+      for (const [parent, units] of groups) {
+        const id = (unit: HTMLElement) => unit.dataset.twitchFavId ?? unit.querySelector<HTMLElement>(CHANNEL)?.dataset.twitchFavId ?? '';
+        const desired = [...units].sort((a, b) => (ranks.get(id(a)) ?? Infinity) - (ranks.get(id(b)) ?? Infinity));
+        if (units.every((unit, index) => unit === desired[index])) continue;
+        // Replace only channel slots; preserve labels, recommendations and other sibling nodes.
+        const slots = units.map(unit => { const marker = document.createComment('twitch-fav-slot'); parent.insertBefore(marker, unit); return marker; });
+        units.forEach(unit => unit.remove());
+        slots.forEach((slot, index) => slot.replaceWith(desired[index]));
+      }
+    } finally { watch(); }
+  }
+  const changed = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+    if (area !== 'local' || !changes[STORAGE_KEY]) return;
+    try { data = validateStreamers(changes[STORAGE_KEY].newValue ?? {}); ready = true; discovered = {}; }
+    catch { ready = false; notify('保存データを読み込めません。設定画面で再インポートまたは初期化してください。'); }
+    schedule();
+  };
+  chrome.storage.onChanged.addListener(changed);
+  watch();
+  void loadStreamers().then(value => { data = value; ready = true; render(); }, () => {
+    render(); notify('設定を読み込めません。設定画面で再インポートまたは初期化してください。');
   });
-  
-  sidebarObserver.observe(sidebar, { childList: true, subtree: true });
+  return () => { observer.disconnect(); if (timer !== undefined) clearTimeout(timer); chrome.storage.onChanged.removeListener(changed); };
 }
-
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => startContent(), { once: true });
+else startContent();

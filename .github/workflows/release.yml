@@ -1,41 +1,74 @@
 name: Release
-
 on:
   push:
-    tags:
-      - 'v*' # Run when tag matches v*, for example v1.0.0
-
+    tags: ['v*']
+    branches: [main]
+    paths: ['.github/workflows/release.yml']
+permissions:
+  contents: write
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Build and package extension
-        run: npm run package
-      
-      - name: Get version from package.json
-        id: package-version
-        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: twitch-favorites-v${{ steps.package-version.outputs.VERSION }}.zip
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          node-version: '24'
+          cache: npm
+      - name: Select the explicitly requested release
+        id: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="v$(node -p 'require("./package.json").version')"
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            test "$GITHUB_REF_NAME" = "$tag"
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          else
+            # One requested release only; future package versions do not auto-publish.
+            test "$tag" = v1.0.1
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.release.outputs.exists == 'false'
+        run: npm ci --ignore-scripts
+      - if: steps.release.outputs.exists == 'false'
+        run: npm run package
+      - name: Offline Chrome fixtures
+        if: steps.release.outputs.exists == 'false'
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:browser
+      - name: Prepare store assets and checksums
+        if: steps.release.outputs.exists == 'false'
+        run: node scripts/submission-bundle.cjs
+      - name: Independently verify archives
+        if: steps.release.outputs.exists == 'false'
+        shell: python
+        run: |
+          import pathlib, zipfile
+          for path in pathlib.Path('artifacts').glob('*.zip'):
+            with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None, str(path)
+      - name: Create verified release
+        if: steps.release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          PUBLISH: ${{ steps.release.outputs.publish }}
+        shell: bash
+        run: |
+          flags=()
+          if [[ "$PUBLISH" != true ]]; then flags+=(--draft); fi
+          gh release create "$RELEASE_TAG" \
+            "artifacts/twitch-favorites-${RELEASE_TAG}.zip" \
+            "artifacts/twitch-favorites-store-assets-${RELEASE_TAG}.zip" \
+            artifacts/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title "Twitch Favorites $RELEASE_TAG" \
+            --notes-file RELEASE_NOTES.md "${flags[@]}"

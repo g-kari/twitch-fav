@@ -1,13 +1,17 @@
 {
   "name": "twitch-fav",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Twitch Favorites - Reorder and favorite Twitch streamers in the sidebar",
   "main": "dist/content.js",
   "scripts": {
     "build": "webpack --mode=production",
     "dev": "webpack --mode=development --watch",
-    "lint": "eslint . --ext .ts",
-    "package": "npm run build && cd dist && zip -r ../twitch-favorites-v$npm_package_version.zip *"
+    "lint": "eslint src --ext .ts --max-warnings=0",
+    "package": "npm run check && node scripts/package.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --module commonjs --outDir .test-build --sourceMap false && node --test tests/*.test.cjs",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "test:browser": "npm run build && node scripts/browser-test.cjs"
   },
   "author": "g-kari",
   "license": "MIT",
@@ -21,5 +25,8 @@
     "typescript": "^5.2.2",
     "webpack": "^5.106.1",
     "webpack-cli": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=22.20.0"
   }
 }

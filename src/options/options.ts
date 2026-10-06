@@ -1,174 +1,84 @@
-import { loadStreamers, saveStreamers, StreamerInfo } from '../utils/storage';
+import { Streamers, sortedStreamers } from '../utils/model';
+import { STORAGE_KEY, loadStreamers } from '../utils/storage';
+import { Action, sendAction } from '../utils/actions';
 import { setupExportButton, setupImportButton, showStatusMessage } from '../utils/importExport';
-
-let streamersList: Record<string, StreamerInfo> = {};
-
-// Initialize the options page
-async function init() {
-  streamersList = await loadStreamers();
-  renderFavoritesList();
-  setupEventListeners();
-}
-
-// Render the favorites list
-function renderFavoritesList() {
-  const listElement = document.getElementById('favorites-list');
-  if (!listElement) return;
-  
-  // Clear current list
-  listElement.innerHTML = '';
-  
-  // Get favorites and sort by order
-  const favorites = Object.values(streamersList)
-    .filter(streamer => streamer.isFavorite)
-    .sort((a, b) => a.order - b.order);
-  
-  if (favorites.length === 0) {
-    const emptyMessage = document.createElement('div');
-    emptyMessage.className = 'empty-message';
-    emptyMessage.textContent = 'お気に入りはまだ追加されていません';
-    listElement.appendChild(emptyMessage);
-    return;
+let data: Streamers = {};
+let busy = false;
+let draggedId: string | null = null;
+const errorMessage = (error: unknown) => showStatusMessage(error instanceof Error ? error.message : '操作に失敗しました。', 'error');
+async function commit(action: Action, success: string): Promise<void> {
+  if (busy) { const error = new Error('保存中です。少し待ってから再試行してください。'); errorMessage(error); throw error; }
+  const focusKey = (document.activeElement as HTMLElement | null)?.dataset.focusKey;
+  busy = true;
+  render();
+  try { data = await sendAction(action); showStatusMessage(success, 'success'); }
+  catch (error) { errorMessage(error); throw error; }
+  finally {
+    busy = false; render();
+    if (focusKey) {
+      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-focus-key]'));
+      (buttons.find(button => button.dataset.focusKey === focusKey && !button.disabled) ?? buttons.find(button => !button.disabled) ?? document.getElementById('export-btn'))?.focus();
+    }
   }
-  
-  // Create list items for each favorite
-  favorites.forEach(favorite => {
-    const item = document.createElement('div');
-    item.className = 'favorite-item';
-    item.setAttribute('draggable', 'true');
-    item.dataset.streamerId = favorite.id;
-    
-    // Create avatar
-    if (favorite.avatarUrl) {
-      const avatar = document.createElement('img');
-      avatar.src = favorite.avatarUrl;
-      avatar.alt = favorite.displayName;
-      item.appendChild(avatar);
-    }
-    
-    // Create name
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = favorite.displayName;
-    item.appendChild(name);
-    
-    // Create remove button
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-btn';
-    removeBtn.textContent = '削除';
-    removeBtn.addEventListener('click', () => {
-      favorite.isFavorite = false;
-      saveStreamers(streamersList).then(() => {
-        renderFavoritesList();
-        showStatusMessage('お気に入りから削除しました', 'success');
-      });
-    });
-    item.appendChild(removeBtn);
-    
-    // Add to list
-    listElement.appendChild(item);
-  });
-  
-  // Setup drag and drop for the list
-  setupDragAndDrop();
 }
-
-// Set up drag and drop functionality
-function setupDragAndDrop() {
-  const items = document.querySelectorAll('.favorite-item');
+function render() {
   const list = document.getElementById('favorites-list');
-  
   if (!list) return;
-  
-  let draggedItem: HTMLElement | null = null;
-  
-  items.forEach(item => {
-    if (!(item instanceof HTMLElement)) return;
-    
-    item.addEventListener('dragstart', () => {
-      draggedItem = item;
-      setTimeout(() => {
-        item.classList.add('dragging');
-      }, 0);
-    });
-    
-    item.addEventListener('dragend', () => {
-      item.classList.remove('dragging');
-      draggedItem = null;
-    });
-    
-    item.addEventListener('dragover', (e) => {
-      e.preventDefault();
-    });
-    
-    item.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      if (draggedItem !== item) {
-        const rect = item.getBoundingClientRect();
-        const y = e.clientY - rect.top;
-        
-        if (y < rect.height / 2) {
-          list.insertBefore(draggedItem!, item);
-        } else {
-          list.insertBefore(draggedItem!, item.nextSibling);
-        }
-      }
-    });
-  });
-  
-  list.addEventListener('dragover', (e) => {
-    e.preventDefault();
-  });
-  
-  list.addEventListener('drop', (e) => {
-    e.preventDefault();
-    
-    // Update order in the streamers list
-    const items = document.querySelectorAll('.favorite-item');
-    let order = 0;
-    
-    items.forEach(item => {
-      const streamerId = item.getAttribute('data-streamer-id');
-      if (streamerId && streamersList[streamerId]) {
-        streamersList[streamerId].order = order++;
-      }
-    });
-    
-    // Save the new order
-    saveStreamers(streamersList).then(() => {
-      showStatusMessage('お気に入りの順序を更新しました', 'success');
-    });
-  });
-}
-
-// Set up event listeners for import/export
-function setupEventListeners() {
-  // Set up export functionality
-  setupExportButton('export-btn', () => {
-    showStatusMessage('設定をエクスポートしました', 'success');
-  });
-  
-  // Set up import functionality
-  setupImportButton(
-    'import-btn',
-    'import-file',
-    async (importedData) => {
-      // Merge with existing data (preserve non-favorites)
-      Object.keys(importedData).forEach(key => {
-        if (!streamersList[key] || importedData[key].isFavorite) {
-          streamersList[key] = importedData[key];
-        }
-      });
-      
-      await saveStreamers(streamersList);
-      renderFavoritesList();
-      showStatusMessage('設定を正常にインポートしました', 'success');
-    },
-    () => {
-      showStatusMessage('設定のインポート中にエラーが発生しました', 'error');
+  const focused = document.activeElement as HTMLElement | null;
+  const focusKey = focused?.dataset.focusKey;
+  list.replaceChildren();
+  const favorites = sortedStreamers(data).filter(item => item.isFavorite);
+  if (!favorites.length) {
+    const empty = document.createElement('div'); empty.className = 'empty-message';
+    empty.textContent = 'お気に入りはまだ追加されていません'; list.appendChild(empty);
+  }
+  favorites.forEach((favorite, index) => {
+    const row = document.createElement('div'); row.className = 'favorite-item';
+    row.draggable = !busy; row.dataset.streamerId = favorite.id;
+    if (favorite.avatarUrl) {
+      const avatar = document.createElement('img'); avatar.src = favorite.avatarUrl; avatar.alt = ''; avatar.referrerPolicy = 'no-referrer'; avatar.width = 30; avatar.height = 30; row.appendChild(avatar);
     }
-  );
+    const name = document.createElement('div'); name.className = 'name'; name.textContent = favorite.displayName; row.appendChild(name);
+    const button = (label: string, suffix: string, action: Action, disabled = false) => {
+      const element = document.createElement('button'); element.textContent = label; element.type = 'button';
+      element.dataset.focusKey = `${favorite.id}-${suffix}`;
+      element.setAttribute('aria-label', `${favorite.displayName}: ${label}`);
+      element.disabled = busy || disabled;
+      element.addEventListener('click', () => { void commit(action, '設定を保存しました').catch(() => undefined); });
+      row.appendChild(element);
+    };
+    button('上へ', 'up', { type: 'move', id: favorite.id, targetId: favorites[index - 1]?.id ?? favorite.id }, index === 0);
+    button('下へ', 'down', { type: 'move', id: favorite.id, targetId: favorites[index + 1]?.id ?? favorite.id }, index === favorites.length - 1);
+    button('削除', 'remove', { type: 'remove', id: favorite.id });
+    row.addEventListener('dragstart', event => {
+      if (busy) { event.preventDefault(); return; }
+      draggedId = favorite.id;
+      event.dataTransfer?.setData('text/plain', favorite.id);
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => { draggedId = null; row.classList.remove('dragging'); });
+    row.addEventListener('dragover', event => { if (draggedId) event.preventDefault(); });
+    row.addEventListener('drop', event => {
+      event.preventDefault();
+      const id = draggedId; draggedId = null;
+      if (id && id !== favorite.id) void commit({ type: 'move', id, targetId: favorite.id }, '順序を保存しました').catch(() => undefined);
+    });
+    list.appendChild(row);
+  });
+  if (focusKey) Array.from(list.querySelectorAll<HTMLElement>('[data-focus-key]')).find(element => element.dataset.focusKey === focusKey)?.focus();
 }
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', init);
+async function refresh() {
+  try { data = await loadStreamers(); render(); } catch (error) { errorMessage(error); }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  setupExportButton('export-btn', () => showStatusMessage('設定をエクスポートしました', 'success'), errorMessage);
+  setupImportButton('import-btn', 'import-file', async imported => {
+    if (!confirm('現在の設定をファイルの内容で置き換えます。続けますか？')) return;
+    await commit({ type: 'import', data: imported }, '設定をインポートしました');
+  }, errorMessage);
+  document.getElementById('clear-btn')?.addEventListener('click', () => {
+    if (confirm('保存したお気に入りと並び順をすべて削除します。続けますか？')) void commit({ type: 'clear' }, '設定を初期化しました').catch(() => undefined);
+  });
+  chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes[STORAGE_KEY]) void refresh(); });
+  void refresh();
+}, { once: true });
