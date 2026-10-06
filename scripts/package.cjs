@@ -1,5 +1,6 @@
-// Deterministic, uncompressed ZIP using the ZIP specification. No platform zip command.
+// Deterministic, DEFLATE-compressed ZIP using the ZIP specification. No platform zip command.
 const fs = require('node:fs');
+const {deflateRawSync} = require('node:zlib');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
@@ -13,10 +14,10 @@ function crc32(data) {
 function zipFiles(entries) {
   const local=[]; const central=[]; let offset=0;
   for (const [filename,data] of entries) {
-    const name=Buffer.from(filename); const crc=crc32(data);
-    const header=Buffer.alloc(30); header.writeUInt32LE(0x04034b50);header.writeUInt16LE(20,4);header.writeUInt16LE(0x800,6);header.writeUInt16LE(33,12);header.writeUInt32LE(crc,14);header.writeUInt32LE(data.length,18);header.writeUInt32LE(data.length,22);header.writeUInt16LE(name.length,26);
+    const name=Buffer.from(filename); const crc=crc32(data); const packed=deflateRawSync(data,{level:9});
+    const header=Buffer.alloc(30); header.writeUInt32LE(0x04034b50);header.writeUInt16LE(20,4);header.writeUInt16LE(0x800,6);header.writeUInt16LE(8,8);header.writeUInt16LE(33,12);header.writeUInt32LE(crc,14);header.writeUInt32LE(packed.length,18);header.writeUInt32LE(data.length,22);header.writeUInt16LE(name.length,26);
     const c=Buffer.alloc(46);c.writeUInt32LE(0x02014b50);c.writeUInt16LE(20,4);header.copy(c,6,4,30);c.writeUInt32LE(offset,42);
-    local.push(header,name,data);central.push(c,name);offset+=header.length+name.length+data.length;
+    local.push(header,name,packed);central.push(c,name);offset+=header.length+name.length+packed.length;
   }
   const directory=Buffer.concat(central);const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(directory.length,12);end.writeUInt32LE(offset,16);
   return Buffer.concat([...local,directory,end]);
