@@ -1,29 +1,18 @@
-import { saveStreamers } from '../utils/storage';
-import { setupExportButton, setupImportButton } from '../utils/importExport';
-
+import { sendAction } from '../utils/actions';
+import { setupExportButton, setupImportButton, showStatusMessage } from '../utils/importExport';
+const errorMessage = (error: Error) => showStatusMessage(error.message, 'error');
 document.addEventListener('DOMContentLoaded', () => {
-  // Set up export functionality
-  setupExportButton('export-btn');
-  
-  // Set up import functionality
-  setupImportButton(
-    'import-btn',
-    'import-file',
-    async (importedData) => {
-      await saveStreamers(importedData);
-      // Show success message
-      alert('設定を正常にインポートしました。Twitchのページを再読み込みしてください。');
-    },
-    () => {
-      alert('設定のインポート中にエラーが発生しました。ファイル形式を確認してください。');
-    }
-  );
-  
-  // Handle options link
-  const optionsLink = document.getElementById('options-link');
-  if (optionsLink) {
-    optionsLink.addEventListener('click', () => {
-      chrome.runtime.openOptionsPage();
+  setupExportButton('export-btn', () => showStatusMessage('設定をエクスポートしました', 'success'), errorMessage);
+  setupImportButton('import-btn', 'import-file', async data => {
+    if (!confirm('現在の設定をファイルの内容で置き換えます。続けますか？')) return;
+    await sendAction({ type: 'import', data });
+    showStatusMessage('設定をインポートしました。開いているTwitchにも反映されます。', 'success');
+  }, errorMessage);
+  document.getElementById('options-link')?.addEventListener('click', event => {
+    event.preventDefault();
+    chrome.runtime.openOptionsPage(() => {
+      const error = chrome.runtime.lastError;
+      if (error) errorMessage(new Error(error.message || '設定画面を開けません。'));
     });
-  }
-});
+  });
+}, { once: true });

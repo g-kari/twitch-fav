@@ -1,89 +1,34 @@
-import { loadStreamers, exportSettings, importSettings, saveStreamers, StreamerInfo } from './storage';
-
-/**
- * Set up export button event handler
- * @param exportBtnId - ID of the export button element
- * @param onSuccess - Optional callback on successful export
- */
-export async function setupExportButton(
-  exportBtnId: string,
-  onSuccess?: (streamers: Record<string, StreamerInfo>) => void
-): Promise<void> {
-  const exportBtn = document.getElementById(exportBtnId);
-  if (exportBtn) {
-    exportBtn.addEventListener('click', async () => {
-      const streamers = await loadStreamers();
-      exportSettings(streamers);
-      if (onSuccess) {
-        onSuccess(streamers);
-      }
-    });
-  }
+import { loadStreamers, exportSettings, importSettings, Streamers } from './storage';
+export function setupExportButton(exportBtnId: string, onSuccess?: (data: Streamers) => void, onError: (error: Error) => void = error => alert(error.message)): void {
+  const button = document.getElementById(exportBtnId) as HTMLButtonElement | null;
+  button?.addEventListener('click', async () => {
+    if (button.disabled) return;
+    button.disabled = true;
+    try { const data = await loadStreamers(); exportSettings(data); onSuccess?.(data); }
+    catch (error) { onError(error instanceof Error ? error : new Error('エクスポートに失敗しました。')); }
+    finally { button.disabled = false; }
+  });
 }
-
-/**
- * Set up import button and file input event handlers
- * @param importBtnId - ID of the import button element
- * @param importFileId - ID of the file input element
- * @param onSuccess - Callback on successful import
- * @param onError - Callback on import error
- */
-export function setupImportButton(
-  importBtnId: string,
-  importFileId: string,
-  onSuccess: (importedData: Record<string, StreamerInfo>) => Promise<void>,
-  onError: (error: Error) => void
-): void {
-  const importBtn = document.getElementById(importBtnId);
-  const importFile = document.getElementById(importFileId) as HTMLInputElement;
-  
-  if (importBtn && importFile) {
-    importBtn.addEventListener('click', () => {
-      importFile.click();
-    });
-    
-    importFile.addEventListener('change', async (event) => {
-      const target = event.target as HTMLInputElement;
-      const file = target.files?.[0];
-      
-      if (file) {
-        try {
-          const importedData = await importSettings(file);
-          await onSuccess(importedData);
-          
-          // Reset input
-          target.value = '';
-        } catch (error) {
-          console.error('Import error:', error);
-          onError(error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-    });
-  }
+export function setupImportButton(importBtnId: string, importFileId: string, onSuccess: (data: Streamers) => Promise<void>, onError: (error: Error) => void): void {
+  const button = document.getElementById(importBtnId) as HTMLButtonElement | null;
+  const input = document.getElementById(importFileId) as HTMLInputElement | null;
+  if (!button || !input) return;
+  let busy = false;
+  button.addEventListener('click', () => { if (!busy) input.click(); });
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file || busy) return;
+    busy = true; button.disabled = true;
+    try { await onSuccess(await importSettings(file)); }
+    catch (error) { onError(error instanceof Error ? error : new Error('インポートに失敗しました。')); }
+    finally { input.value = ''; button.disabled = false; busy = false; }
+  });
 }
-
-/**
- * Show a status message (for options page)
- * @param message - Message to display
- * @param type - Type of message (success or error)
- * @param elementId - ID of the status message element
- * @param timeout - Time in ms to show the message
- */
-export function showStatusMessage(
-  message: string, 
-  type: 'success' | 'error',
-  elementId: string = 'status-message',
-  timeout: number = 3000
-): void {
-  const statusElement = document.getElementById(elementId);
-  if (!statusElement) return;
-  
-  statusElement.textContent = message;
-  statusElement.className = type;
-  
-  // Clear after specified timeout
-  setTimeout(() => {
-    statusElement.textContent = '';
-    statusElement.className = '';
-  }, timeout);
+const timers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+export function showStatusMessage(message: string, type: 'success' | 'error', elementId = 'status-message', timeout = 5000): void {
+  const element = document.getElementById(elementId);
+  if (!element) return;
+  clearTimeout(timers.get(element));
+  element.textContent = message; element.className = type;
+  timers.set(element, setTimeout(() => { element.textContent = ''; element.className = ''; }, timeout));
 }
