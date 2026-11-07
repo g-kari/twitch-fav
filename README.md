@@ -73,7 +73,7 @@ npm run package
 
 ## 品質確認・現在の制約
 
-Chrome 120以降、開発にはNode.js 22.20以降（CIは24）を使用してください。依存追加はありません。
+Chrome 120以降、開発にはNode.js 22.x（22.20.0以降）または24以降（CIは24）を使用してください。ESLint 10対応のため、lint用の開発依存に`@eslint/js`と`globals`を追加しています。
 
 ```bash
 npm run typecheck
