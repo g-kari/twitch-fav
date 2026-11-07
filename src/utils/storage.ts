@@ -1,82 +1,47 @@
-// Types for our data structure
-export interface StreamerInfo {
-  id: string;
-  username: string;
-  displayName: string;
-  avatarUrl?: string;
-  isFavorite: boolean;
-  order: number;
-}
-
-// Storage keys
+import { MAX_IMPORT_BYTES, Streamers, validateStreamers } from './model';
+export type { StreamerInfo, Streamers } from './model';
 export const STORAGE_KEY = 'twitch_favorites_data';
-
-// Save data to Chrome storage
-export async function saveStreamers(streamers: Record<string, StreamerInfo>): Promise<void> {
+export async function saveStreamers(streamers: Streamers): Promise<void> {
+  const validated = validateStreamers(streamers);
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set({ [STORAGE_KEY]: streamers }, () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else {
-        resolve();
-      }
+    chrome.storage.local.set({ [STORAGE_KEY]: validated }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message || '設定の保存に失敗しました。'));
+      else resolve();
     });
   });
 }
-
-// Load data from Chrome storage
-export async function loadStreamers(): Promise<Record<string, StreamerInfo>> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY], (result) => {
-      if (result && result[STORAGE_KEY]) {
-        resolve(result[STORAGE_KEY] as Record<string, StreamerInfo>);
-      } else {
-        resolve({});
-      }
+export async function loadStreamers(): Promise<Streamers> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get([STORAGE_KEY], result => {
+      const error = chrome.runtime.lastError;
+      if (error) { reject(new Error(error.message || '設定の読込に失敗しました。')); return; }
+      try { resolve(validateStreamers(result?.[STORAGE_KEY] ?? {})); } catch (error) { reject(error); }
     });
   });
 }
-
-// Export settings to JSON file
-export function exportSettings(streamers: Record<string, StreamerInfo>): void {
-  const data = JSON.stringify(streamers, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `twitch-favorites-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  
-  // Clean up
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 100);
+export function exportSettings(streamers: Streamers): void {
+  const data = JSON.stringify(validateStreamers(streamers), null, 2);
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `twitch-favorites-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
-// Import settings from JSON file
-export async function importSettings(file: File): Promise<Record<string, StreamerInfo>> {
+export async function importSettings(file: File): Promise<Streamers> {
+  if (file.size > MAX_IMPORT_BYTES) throw new Error('設定ファイルは1 MiB以下にしてください。');
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
-    reader.onload = (event) => {
+    reader.onload = () => {
       try {
-        const result = event.target?.result;
-        if (typeof result === 'string') {
-          const data = JSON.parse(result) as Record<string, StreamerInfo>;
-          resolve(data);
-        } else {
-          reject(new Error('Failed to read file'));
-        }
-      } catch (error) {
-        reject(error);
-      }
+        if (typeof reader.result !== 'string') throw new Error('ファイルを読み込めません。');
+        resolve(validateStreamers(JSON.parse(reader.result)));
+      } catch (error) { reject(error); }
     };
-    
-    reader.onerror = () => {
-      reject(new Error('Error reading file'));
-    };
-    
+    reader.onerror = reader.onabort = () => reject(new Error('ファイルを読み込めません。'));
     reader.readAsText(file);
   });
 }
