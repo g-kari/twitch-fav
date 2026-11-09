@@ -19,7 +19,7 @@
     "@eslint/js": "10.0.1",
     "@types/chrome": "^0.3.0",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
-    "@typescript-eslint/parser": "^8.58.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "copy-webpack-plugin": "^14.0.0",
     "eslint": "^10.0.0",
     "globals": "17.13.0",
