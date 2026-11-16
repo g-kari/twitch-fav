@@ -24,7 +24,7 @@
     "eslint": "^10.14.0",
     "globals": "17.14.0",
     "ts-loader": "^9.5.1",
-    "typescript": "^5.2.2",
+    "typescript": "^7.0.0",
     "webpack": "^5.106.1",
     "webpack-cli": "^7.3.1"
   },
