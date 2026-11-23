@@ -18,7 +18,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/chrome": "^0.3.7",
-    "@typescript-eslint/eslint-plugin": "^8.72.2",
+    "@typescript-eslint/eslint-plugin": "^8.73.0",
     "@typescript-eslint/parser": "^8.73.0",
     "copy-webpack-plugin": "^14.0.0",
     "eslint": "^10.14.0",
